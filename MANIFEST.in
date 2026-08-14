@@ -1,0 +1,2 @@
+recursive-include pretix_reservation/templates *
+recursive-include pretix_reservation/locale *
