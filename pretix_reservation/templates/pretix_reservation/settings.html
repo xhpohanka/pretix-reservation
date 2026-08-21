@@ -3,6 +3,12 @@
 {% block title %}{% trans "Reservation checkout" %}{% endblock %}
 {% block inside %}
     <h1>{% trans "Reservation checkout" %}</h1>
+    <div class="alert alert-info">
+        {% blocktrans trimmed %}
+            The configured validity only applies when the customer reserves without choosing a
+            payment method. Selecting a payment method later keeps the original deadline.
+        {% endblocktrans %}
+    </div>
     <form action="" method="post" class="form-horizontal">
         {% csrf_token %}
         {% bootstrap_form form layout="control" %}

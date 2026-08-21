@@ -81,3 +81,24 @@ msgstr "Tato objednávka bude vytvořena jako nezaplacená rezervace. Zaplatit m
 #: templates/pretix_reservation/settings.html:10
 msgid "Save"
 msgstr "Uložit"
+
+msgid "Reservation validity"
+msgstr "Platnost rezervace"
+
+msgid ""
+"An unpaid reservation expires at this time relative to the start of the "
+"earliest date included in the order. Choosing a payment method later does "
+"not extend it."
+msgstr ""
+"Nezaplacená rezervace vyprší v tomto čase relativně k začátku nejčasnějšího "
+"termínu obsaženého v objednávce. Pozdější výběr platební metody ji "
+"neprodlouží."
+
+msgid ""
+"The configured validity only applies when the customer reserves without "
+"choosing a payment method. Selecting a payment method later keeps the "
+"original deadline."
+msgstr ""
+"Nastavená platnost se použije pouze tehdy, když zákazník rezervuje bez "
+"výběru platební metody. Při pozdějším výběru platby zůstane zachován původní "
+"termín."

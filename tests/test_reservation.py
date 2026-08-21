@@ -11,6 +11,9 @@ from pretix.base.models import (
 )
 from pretix.testutils.sessions import get_cart_session_key
 
+from pretix_reservation.forms import ReservationSettingsForm
+from pretix_reservation.signals import unpaid_reservation_expiry
+
 
 class ReservationCheckoutTest(TestCase):
     @scopes_disabled()
@@ -113,6 +116,7 @@ class ReservationCheckoutTest(TestCase):
     @scopes_disabled()
     def test_reservation_order_and_later_payment_use_standard_lifecycle(self):
         self.enable_reservations()
+        self.event.settings.reservation_expiry = "RELDATE/minutes/120/date_from/"
         self.add_ticket()
         payment_url = self.complete_questions().url
         self.client.post(
@@ -130,8 +134,10 @@ class ReservationCheckoutTest(TestCase):
         assert order.payments.count() == 0
         assert order.positions.count() == 1
         assert self.quota.availability() == (Quota.AVAILABILITY_ORDERED, 0)
-        assert timedelta(minutes=55) < order.expires - order.datetime <= timedelta(minutes=60)
+        expected_expiry = self.event.date_from - timedelta(hours=2)
+        assert order.expires == expected_expiry
         assert order.event.settings.payment_term_minutes == 60
+        original_expiry = order.expires
 
         pay_url = (
             f"/{self.organizer.slug}/{self.event.slug}/order/"
@@ -141,6 +147,8 @@ class ReservationCheckoutTest(TestCase):
         assert "Bank transfer" in response.content.decode()
         response = self.client.post(pay_url, {"payment": "banktransfer"})
         assert response.status_code == 302
+        order.refresh_from_db()
+        assert order.expires == original_expiry
         payment = order.payments.get()
         assert payment.provider == "banktransfer"
         assert payment.state == OrderPayment.PAYMENT_STATE_CREATED
@@ -148,3 +156,64 @@ class ReservationCheckoutTest(TestCase):
         payment.confirm()
         order.refresh_from_db()
         assert order.status == Order.STATUS_PAID
+        assert order.expires == original_expiry
+
+    @scopes_disabled()
+    def test_paid_checkout_keeps_standard_payment_term(self):
+        self.enable_reservations()
+        self.event.settings.reservation_expiry = "RELDATE/minutes/120/date_from/"
+        self.add_ticket()
+        payment_url = self.complete_questions().url
+        self.client.post(payment_url, {"payment": "banktransfer"})
+        response = self.client.post(
+            f"/{self.organizer.slug}/{self.event.slug}/checkout/confirm/",
+            follow=True,
+        )
+        assert BeautifulSoup(response.content, "lxml").select(".thank-you")
+
+        order = Order.objects.get()
+        assert timedelta(minutes=55) < order.expires - order.datetime <= timedelta(minutes=60)
+
+    @scopes_disabled()
+    def test_expiry_uses_earliest_subevent(self):
+        self.enable_reservations()
+        self.event.has_subevents = True
+        self.event.save(update_fields=["has_subevents"])
+        late = self.event.subevents.create(
+            name="Late", date_from=now() + timedelta(days=10),
+        )
+        early = self.event.subevents.create(
+            name="Early", date_from=now() + timedelta(days=5),
+        )
+        self.event.settings.reservation_expiry = "RELDATE/minutes/180/date_from/"
+        order = Order(
+            event=self.event,
+            sales_channel=self.event.organizer.sales_channels.get(identifier="web"),
+        )
+
+        expires = unpaid_reservation_expiry(
+            self.event, order, subevents=[late, early], payments=[],
+        )
+
+        assert expires == early.date_from - timedelta(hours=3)
+        assert unpaid_reservation_expiry(
+            self.event, order, subevents=[early], payments=[{"provider": "banktransfer"}],
+        ) is None
+
+    @scopes_disabled()
+    def test_settings_form_saves_relative_expiry(self):
+        form = ReservationSettingsForm(
+            obj=self.event,
+            data={
+                "reservation_enabled": "on",
+                "reservation_expiry_0": "relative_minutes",
+                "reservation_expiry_3": "date_from",
+                "reservation_expiry_5": "240",
+                "reservation_expiry_7": "before",
+            },
+        )
+
+        assert form.is_valid(), form.errors
+        form.save()
+        assert self.event.settings.reservation_enabled
+        assert self.event.settings.get("reservation_expiry") == "RELDATE/minutes/240/date_from/"
