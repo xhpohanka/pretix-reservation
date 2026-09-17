@@ -7,12 +7,12 @@ from django.utils.timezone import now
 from django_scopes import scopes_disabled
 
 from pretix.base.models import (
-    CartPosition, Event, Item, Order, OrderPayment, Organizer, Quota,
+    CartPosition, Event, Item, Order, OrderPayment, Organizer, Quota, Team, User,
 )
 from pretix.testutils.sessions import get_cart_session_key
 
 from pretix_reservation.forms import ReservationSettingsForm
-from pretix_reservation.signals import unpaid_reservation_expiry
+from pretix_reservation.signals import reservation_settings_navigation, unpaid_reservation_expiry
 
 
 class ReservationCheckoutTest(TestCase):
@@ -217,3 +217,19 @@ class ReservationCheckoutTest(TestCase):
         form.save()
         assert self.event.settings.reservation_enabled
         assert self.event.settings.get("reservation_expiry") == "RELDATE/minutes/240/date_from/"
+
+    @scopes_disabled()
+    def test_settings_are_in_event_navigation(self):
+        user = User.objects.create_user("staff@example.com", "test")
+        team = Team.objects.create(organizer=self.organizer, name="Staff", all_event_permissions=True)
+        team.all_events = True
+        team.save()
+        team.members.add(user)
+        self.client.force_login(user)
+        response = self.client.get(
+            f"/control/event/{self.organizer.slug}/{self.event.slug}/reservation/settings"
+        )
+
+        links = reservation_settings_navigation(self.event, response.wsgi_request)
+        self.assertEqual(links[0]["label"], "Reservation checkout")
+        self.assertTrue(links[0]["active"])

@@ -1,7 +1,10 @@
 from django.dispatch import receiver
 from django.template.loader import get_template
+from django.urls import resolve, reverse
+from django.utils.translation import gettext_lazy as _
 
 from pretix.base.signals import order_expiry
+from pretix.control.signals import nav_event_settings
 from pretix.presale.signals import (
     checkout_confirm_page_content, checkout_payment_required,
 )
@@ -9,6 +12,22 @@ from pretix.presale.checkoutflow import PAYMENT_SELECTION_SKIPPED
 from pretix.presale.views.cart import cart_session
 
 from .checkout import reservation_enabled, reservation_expiry
+
+
+@receiver(nav_event_settings, dispatch_uid="pretix_reservation_nav_event_settings")
+def reservation_settings_navigation(sender, request, **kwargs):
+    if not request.user.has_event_permission(
+        request.organizer, request.event, "event.settings.general:write", request=request,
+    ):
+        return []
+    return [{
+        "label": _("Reservation checkout"),
+        "url": reverse("plugins:pretix_reservation:settings", kwargs={
+            "organizer": request.organizer.slug,
+            "event": request.event.slug,
+        }),
+        "active": resolve(request.path_info).namespace == "plugins:pretix_reservation",
+    }]
 
 
 @receiver(order_expiry, dispatch_uid="pretix_reservation_order_expiry")
