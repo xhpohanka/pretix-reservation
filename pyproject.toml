@@ -9,6 +9,9 @@ dependencies = ["pretix>=2026.6.0.dev0"]
 [project.entry-points."pretix.plugin"]
 pretix_reservation = "pretix_reservation:PretixPluginMeta"
 
+[project.urls]
+Homepage = "https://github.com/xhpohanka/pretix-reservation"
+
 [build-system]
 requires = ["setuptools", "pretix-plugin-build"]
 build-backend = "setuptools.build_meta"
